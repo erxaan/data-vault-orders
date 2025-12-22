@@ -58,7 +58,51 @@ SELECT 'hub_order -> link_order_customer',
     COUNT(*)
 FROM hub_order ho
 LEFT JOIN link_order_customer loc ON ho.order_hub_key = loc.order_hub_key
-WHERE loc.order_hub_key IS NULL;
+WHERE loc.order_hub_key IS NULL
+UNION ALL
+SELECT 'hub_order -> link_order_status',
+    COUNT(*)
+FROM hub_order ho
+LEFT JOIN link_order_status los ON ho.order_hub_key = los.order_hub_key
+WHERE los.order_hub_key IS NULL
+UNION ALL
+SELECT 'hub_order -> link_order_product',
+    COUNT(*)
+FROM hub_order ho
+LEFT JOIN link_order_product lop ON ho.order_hub_key = lop.order_hub_key
+WHERE lop.order_hub_key IS NULL;
+
+-- Проверка целостности партиционированной таблицы с Data Vault
+SELECT 'Partitioned Table Integrity' AS section;
+SELECT 
+    'orders_partitioned -> hub_order' AS check_name,
+    COUNT(*) AS orphaned_records
+FROM orders_partitioned op
+LEFT JOIN hub_order ho ON op.order_hub_key = ho.order_hub_key
+WHERE ho.order_hub_key IS NULL
+UNION ALL
+SELECT 'orders_partitioned -> hub_customer',
+    COUNT(*)
+FROM orders_partitioned op
+LEFT JOIN hub_customer hc ON op.customer_hub_key = hc.customer_hub_key
+WHERE hc.customer_hub_key IS NULL
+UNION ALL
+SELECT 'orders_partitioned -> hub_order_status',
+    COUNT(*)
+FROM orders_partitioned op
+LEFT JOIN hub_order_status hos ON op.status_hub_key = hos.status_hub_key
+WHERE hos.status_hub_key IS NULL;
+
+-- Проверка соответствия данных между Data Vault и orders_partitioned
+SELECT 'Data Consistency' AS section;
+SELECT 
+    'sat_order vs orders_partitioned (count)' AS check_name,
+    ABS((SELECT COUNT(*) FROM sat_order WHERE load_end_date IS NULL) - 
+        (SELECT COUNT(*) FROM orders_partitioned)) AS difference
+UNION ALL
+SELECT 'sat_order vs orders_partitioned (total_amount)',
+    ABS((SELECT COALESCE(SUM(total_amount), 0) FROM sat_order WHERE load_end_date IS NULL) - 
+        (SELECT COALESCE(SUM(total_amount), 0) FROM orders_partitioned))::DECIMAL(10,2);
 
 -- Проверка партиций
 SELECT 'Partitions' AS section;

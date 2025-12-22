@@ -31,11 +31,15 @@
 
 ### Партиционированная таблица
 
-**orders_partitioned** - партиционирована по дате заказа (RANGE):
-- orders_2023 (2023-01-01 до 2024-01-01)
-- orders_2024 (2024-01-01 до 2025-01-01)
-- orders_2025 (2025-01-01 до 2026-01-01)
-- orders_2026 (2026-01-01 до 2027-01-01)
+**orders_partitioned** - партиционирована по дате заказа (RANGE), соответствует схеме Data Vault:
+- Использует `order_hub_key` вместо `order_id` (соответствие Data Vault)
+- Связи с другими сущностями через `customer_hub_key` и `status_hub_key`
+- Данные заполняются через линки и сателлиты Data Vault
+- Партиции по годам:
+  - orders_2023 (2023-01-01 до 2024-01-01)
+  - orders_2024 (2024-01-01 до 2025-01-01)
+  - orders_2025 (2025-01-01 до 2026-01-01)
+  - orders_2026 (2026-01-01 до 2027-01-01)
 
 ## Быстрый старт
 
@@ -75,15 +79,13 @@ SELECT * FROM orders_partitioned
 WHERE order_date >= '2025-12-01'
 ORDER BY order_date DESC;
 
--- Заказы с клиентами через Data Vault
-SELECT sc.name, so.order_date, so.total_amount, sos.status_name
-FROM hub_order ho
-JOIN sat_order so ON ho.order_hub_key = so.order_hub_key
-JOIN link_order_customer loc ON ho.order_hub_key = loc.order_hub_key
-JOIN sat_customer sc ON loc.customer_hub_key = sc.customer_hub_key
-JOIN link_order_status los ON ho.order_hub_key = los.order_hub_key
-JOIN sat_order_status sos ON los.status_hub_key = sos.status_hub_key
-WHERE so.load_end_date IS NULL;
+-- Заказы с клиентами через Data Vault (из партиционированной таблицы)
+SELECT sc.name, op.order_date, op.total_amount, sos.status_name
+FROM orders_partitioned op
+JOIN sat_customer sc ON op.customer_hub_key = sc.customer_hub_key
+JOIN sat_order_status sos ON op.status_hub_key = sos.status_hub_key
+WHERE sc.load_end_date IS NULL AND sos.load_end_date IS NULL
+ORDER BY op.order_date DESC;
 ```
 
 ## Остановка

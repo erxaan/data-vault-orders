@@ -107,8 +107,9 @@ CREATE TABLE IF NOT EXISTS link_order_product (
     quantity INTEGER NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
     load_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    record_source VARCHAR(50) NOT NULL DEFAULT 'SOURCE_SYSTEM',
-    CONSTRAINT uk_link_order_product UNIQUE (order_hub_key, product_hub_key)
+    record_source VARCHAR(50) NOT NULL DEFAULT 'SOURCE_SYSTEM'
+    -- Примечание: UNIQUE constraint убран, так как один заказ может содержать один продукт несколько раз
+    -- Уникальность обеспечивается PRIMARY KEY (order_product_link_key)
 );
 
 -- Индексы для Hubs

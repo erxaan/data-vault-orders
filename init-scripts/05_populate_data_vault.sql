@@ -133,13 +133,22 @@ BEGIN
     JOIN hub_order_status hs ON o.status_id = hs.status_id
     ON CONFLICT (order_hub_key, status_hub_key) DO NOTHING;
 
+    -- Заполнение link_order_product
+    -- Примечание: один заказ может содержать один продукт несколько раз (разные позиции)
     INSERT INTO link_order_product (order_hub_key, product_hub_key, quantity, price, load_date, record_source)
     SELECT ho.order_hub_key, hp.product_hub_key, oi.quantity, oi.price, oi.created_at, 'SOURCE_SYSTEM'
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.order_id
     JOIN hub_order ho ON o.order_id = ho.order_id
     JOIN hub_product hp ON oi.product_id = hp.product_id
-    ON CONFLICT (order_hub_key, product_hub_key) DO NOTHING;
+    WHERE NOT EXISTS (
+        SELECT 1 FROM link_order_product lop
+        WHERE lop.order_hub_key = ho.order_hub_key
+        AND lop.product_hub_key = hp.product_hub_key
+        AND lop.quantity = oi.quantity
+        AND lop.price = oi.price
+        AND lop.load_date = oi.created_at
+    );
 
     RAISE NOTICE 'Data Vault population completed';
 END;
