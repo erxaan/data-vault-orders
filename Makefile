@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs shell psql verify test clean populate partitioned
+.PHONY: help up down restart logs shell psql verify test clean populate examples
 
 help:
 	@echo "Доступные команды:"
@@ -33,9 +33,6 @@ test: ## Тест партиций
 
 populate: ## Заполнить Data Vault
 	docker exec -i data-vault-orders-postgres psql -U postgres -d orders_dw < scripts/populate_data_vault.sql
-
-partitioned: ## Заполнить партиционированную таблицу
-	docker exec -i data-vault-orders-postgres psql -U postgres -d orders_dw < scripts/populate_partitioned.sql
 
 examples: ## Примеры запросов
 	docker exec -i data-vault-orders-postgres psql -U postgres -d orders_dw < scripts/query_examples.sql

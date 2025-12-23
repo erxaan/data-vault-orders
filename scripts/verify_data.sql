@@ -37,13 +37,14 @@ SELECT 'link_order_status', COUNT(*) FROM link_order_status
 UNION ALL
 SELECT 'link_order_product', COUNT(*) FROM link_order_product;
 
--- Проверка партиционированной таблицы
-SELECT 'Partitioned Table' AS section;
+-- Проверка партиционированной таблицы sat_order
+SELECT 'Partitioned Table (sat_order)' AS section;
 SELECT 
     COUNT(*) AS total_orders,
-    COUNT(DISTINCT customer_hub_key) AS unique_customers,
+    COUNT(DISTINCT order_hub_key) AS unique_orders,
     SUM(total_amount) AS total_revenue
-FROM orders_partitioned;
+FROM sat_order
+WHERE load_end_date IS NULL;
 
 -- Проверка целостности ссылок
 SELECT 'Data Integrity' AS section;
@@ -72,45 +73,47 @@ FROM hub_order ho
 LEFT JOIN link_order_product lop ON ho.order_hub_key = lop.order_hub_key
 WHERE lop.order_hub_key IS NULL;
 
--- Проверка целостности партиционированной таблицы с Data Vault
+-- Проверка целостности партиционированной sat_order с Data Vault
 SELECT 'Partitioned Table Integrity' AS section;
 SELECT 
-    'orders_partitioned -> hub_order' AS check_name,
+    'sat_order -> hub_order' AS check_name,
     COUNT(*) AS orphaned_records
-FROM orders_partitioned op
-LEFT JOIN hub_order ho ON op.order_hub_key = ho.order_hub_key
-WHERE ho.order_hub_key IS NULL
-UNION ALL
-SELECT 'orders_partitioned -> hub_customer',
-    COUNT(*)
-FROM orders_partitioned op
-LEFT JOIN hub_customer hc ON op.customer_hub_key = hc.customer_hub_key
-WHERE hc.customer_hub_key IS NULL
-UNION ALL
-SELECT 'orders_partitioned -> hub_order_status',
-    COUNT(*)
-FROM orders_partitioned op
-LEFT JOIN hub_order_status hos ON op.status_hub_key = hos.status_hub_key
-WHERE hos.status_hub_key IS NULL;
+FROM sat_order so
+LEFT JOIN hub_order ho ON so.order_hub_key = ho.order_hub_key
+WHERE so.load_end_date IS NULL
+AND ho.order_hub_key IS NULL;
 
--- Проверка соответствия данных между Data Vault и orders_partitioned
-SELECT 'Data Consistency' AS section;
-SELECT 
-    'sat_order vs orders_partitioned (count)' AS check_name,
-    ABS((SELECT COUNT(*) FROM sat_order WHERE load_end_date IS NULL) - 
-        (SELECT COUNT(*) FROM orders_partitioned)) AS difference
-UNION ALL
-SELECT 'sat_order vs orders_partitioned (total_amount)',
-    ABS((SELECT COALESCE(SUM(total_amount), 0) FROM sat_order WHERE load_end_date IS NULL) - 
-        (SELECT COALESCE(SUM(total_amount), 0) FROM orders_partitioned))::DECIMAL(10,2);
-
--- Проверка партиций
+-- Проверка партиций sat_order
 SELECT 'Partitions' AS section;
 SELECT 
     schemaname,
     tablename,
     pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
 FROM pg_tables
-WHERE tablename LIKE 'orders_%'
+WHERE tablename LIKE 'sat_order_%'
 ORDER BY tablename;
+
+-- Проверка распределения данных по партициям
+SELECT 'Partition Distribution' AS section;
+SELECT 
+    'sat_order_2023' AS partition,
+    COUNT(*) AS orders_count
+FROM sat_order
+WHERE order_date >= '2023-01-01' AND order_date < '2024-01-01'
+AND load_end_date IS NULL
+UNION ALL
+SELECT 'sat_order_2024', COUNT(*)
+FROM sat_order
+WHERE order_date >= '2024-01-01' AND order_date < '2025-01-01'
+AND load_end_date IS NULL
+UNION ALL
+SELECT 'sat_order_2025', COUNT(*)
+FROM sat_order
+WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01'
+AND load_end_date IS NULL
+UNION ALL
+SELECT 'sat_order_2026', COUNT(*)
+FROM sat_order
+WHERE order_date >= '2026-01-01' AND order_date < '2027-01-01'
+AND load_end_date IS NULL;
 

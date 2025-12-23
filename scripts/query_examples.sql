@@ -45,13 +45,23 @@ WHERE sc.load_end_date IS NULL AND so.load_end_date IS NULL
 GROUP BY sc.customer_sat_key, sc.name
 ORDER BY total_spent DESC;
 
--- Запрос из партиционированной таблицы с фильтром по дате
+-- Запрос из партиционированной sat_order с фильтром по дате
 SELECT 
-    op.order_date,
+    so.order_date,
     COUNT(*) AS orders_count,
-    SUM(op.total_amount) AS daily_total
-FROM orders_partitioned op
-WHERE op.order_date >= '2025-12-01'
-GROUP BY op.order_date
-ORDER BY op.order_date DESC;
+    SUM(so.total_amount) AS daily_total
+FROM sat_order so
+WHERE so.order_date >= '2025-12-01'
+AND so.load_end_date IS NULL
+GROUP BY so.order_date
+ORDER BY so.order_date DESC;
+
+-- Пример запроса: Сколько заказов было в 2025 году
+SELECT 
+    'Заказы в 2025 году' AS description,
+    COUNT(*) AS orders_count,
+    SUM(total_amount) AS total_amount
+FROM sat_order
+WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01'
+AND load_end_date IS NULL;
 

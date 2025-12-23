@@ -59,16 +59,34 @@ CREATE TABLE IF NOT EXISTS sat_product (
     hash_diff VARCHAR(64)
 );
 
+-- Партиционированная таблица sat_order по дате заказа
+-- Создаем последовательность для order_sat_key
+CREATE SEQUENCE IF NOT EXISTS sat_order_order_sat_key_seq;
+
 CREATE TABLE IF NOT EXISTS sat_order (
-    order_sat_key BIGSERIAL PRIMARY KEY,
+    order_sat_key BIGINT NOT NULL DEFAULT nextval('sat_order_order_sat_key_seq'),
     order_hub_key BIGINT NOT NULL REFERENCES hub_order(order_hub_key),
     order_date DATE NOT NULL,
     total_amount DECIMAL(10, 2) NOT NULL,
     load_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     load_end_date TIMESTAMP,
     record_source VARCHAR(50) NOT NULL DEFAULT 'SOURCE_SYSTEM',
-    hash_diff VARCHAR(64)
-);
+    hash_diff VARCHAR(64),
+    PRIMARY KEY (order_sat_key, order_date)
+) PARTITION BY RANGE (order_date);
+
+-- Партиции по годам
+CREATE TABLE IF NOT EXISTS sat_order_2023 PARTITION OF sat_order
+    FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
+
+CREATE TABLE IF NOT EXISTS sat_order_2024 PARTITION OF sat_order
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+
+CREATE TABLE IF NOT EXISTS sat_order_2025 PARTITION OF sat_order
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+
+CREATE TABLE IF NOT EXISTS sat_order_2026 PARTITION OF sat_order
+    FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
 
 CREATE TABLE IF NOT EXISTS sat_order_status (
     status_sat_key BIGSERIAL PRIMARY KEY,
@@ -108,8 +126,8 @@ CREATE TABLE IF NOT EXISTS link_order_product (
     price DECIMAL(10, 2) NOT NULL,
     load_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     record_source VARCHAR(50) NOT NULL DEFAULT 'SOURCE_SYSTEM'
-    -- Примечание: UNIQUE constraint убран, так как один заказ может содержать один продукт несколько раз
-    -- Уникальность обеспечивается PRIMARY KEY (order_product_link_key)
+    -- Убрал UNIQUE constraint, потому что один заказ может содержать продукт несколько раз
+    -- Уникальность через PRIMARY KEY (order_product_link_key)
 );
 
 -- Индексы для Hubs
@@ -121,7 +139,10 @@ CREATE INDEX IF NOT EXISTS idx_hub_status_load_date ON hub_order_status(load_dat
 -- Индексы для Satellites
 CREATE INDEX IF NOT EXISTS idx_sat_customer_hub_key ON sat_customer(customer_hub_key, load_date);
 CREATE INDEX IF NOT EXISTS idx_sat_product_hub_key ON sat_product(product_hub_key, load_date);
+-- Индексы для партиционированной sat_order
 CREATE INDEX IF NOT EXISTS idx_sat_order_hub_key ON sat_order(order_hub_key, load_date);
+CREATE INDEX IF NOT EXISTS idx_sat_order_date ON sat_order(order_date);
+CREATE INDEX IF NOT EXISTS idx_sat_order_load_date ON sat_order(load_date);
 CREATE INDEX IF NOT EXISTS idx_sat_status_hub_key ON sat_order_status(status_hub_key, load_date);
 
 -- Индексы для Links

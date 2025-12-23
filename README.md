@@ -21,7 +21,7 @@
 **Satellites (Сателлиты):**
 - sat_customer - атрибуты клиентов (name, email, phone, address)
 - sat_product - атрибуты продуктов (product_name, category, price)
-- sat_order - атрибуты заказов (order_date, total_amount)
+- sat_order - атрибуты заказов (order_date, total_amount) - **партиционирована по order_date**
 - sat_order_status - атрибуты статусов (status_name, description)
 
 **Links (Линки):**
@@ -29,17 +29,16 @@
 - link_order_status - связь заказов со статусами
 - link_order_product - связь заказов с продуктами (с quantity и price)
 
-### Партиционированная таблица
+### Партиционирование
 
-**orders_partitioned** - партиционирована по дате заказа (RANGE), соответствует схеме Data Vault:
-- Использует `order_hub_key` вместо `order_id` (соответствие Data Vault)
-- Связи с другими сущностями через `customer_hub_key` и `status_hub_key`
-- Данные заполняются через линки и сателлиты Data Vault
+**sat_order** - партиционирована по дате заказа (RANGE):
+- Партиционирование по полю `order_date`
 - Партиции по годам:
-  - orders_2023 (2023-01-01 до 2024-01-01)
-  - orders_2024 (2024-01-01 до 2025-01-01)
-  - orders_2025 (2025-01-01 до 2026-01-01)
-  - orders_2026 (2026-01-01 до 2027-01-01)
+  - sat_order_2023 (2023-01-01 до 2024-01-01)
+  - sat_order_2024 (2024-01-01 до 2025-01-01)
+  - sat_order_2025 (2025-01-01 до 2026-01-01)
+  - sat_order_2026 (2026-01-01 до 2027-01-01)
+- Позволяет эффективно выполнять запросы по годам, например: "Сколько заказов было в 2025 году"
 
 ## Быстрый старт
 
@@ -64,8 +63,7 @@ make test
 Для ручного запуска используйте скрипты из `scripts/`:
 
 ```bash
-make populate      # заполнить Data Vault
-make partitioned   # заполнить партиции
+make populate      # заполнить Data Vault (sat_order заполняется автоматически)
 make test         # тест партиций
 make verify       # проверка целостности
 make examples     # примеры запросов
@@ -74,18 +72,32 @@ make examples     # примеры запросов
 ## Примеры
 
 ```sql
--- Запрос из партиционированной таблицы
-SELECT * FROM orders_partitioned
+-- Запрос из партиционированной sat_order
+SELECT * FROM sat_order
 WHERE order_date >= '2025-12-01'
+AND load_end_date IS NULL
 ORDER BY order_date DESC;
 
--- Заказы с клиентами через Data Vault (из партиционированной таблицы)
-SELECT sc.name, op.order_date, op.total_amount, sos.status_name
-FROM orders_partitioned op
-JOIN sat_customer sc ON op.customer_hub_key = sc.customer_hub_key
-JOIN sat_order_status sos ON op.status_hub_key = sos.status_hub_key
-WHERE sc.load_end_date IS NULL AND sos.load_end_date IS NULL
-ORDER BY op.order_date DESC;
+-- Сколько заказов было в 2025 году
+SELECT 
+    COUNT(*) AS orders_count,
+    SUM(total_amount) AS total_amount
+FROM sat_order
+WHERE order_date >= '2025-01-01' AND order_date < '2026-01-01'
+AND load_end_date IS NULL;
+
+-- Заказы с клиентами через Data Vault
+SELECT sc.name, so.order_date, so.total_amount, sos.status_name
+FROM sat_order so
+JOIN hub_order ho ON so.order_hub_key = ho.order_hub_key
+JOIN link_order_customer loc ON ho.order_hub_key = loc.order_hub_key
+JOIN sat_customer sc ON loc.customer_hub_key = sc.customer_hub_key
+JOIN link_order_status los ON ho.order_hub_key = los.order_hub_key
+JOIN sat_order_status sos ON los.status_hub_key = sos.status_hub_key
+WHERE so.load_end_date IS NULL 
+AND sc.load_end_date IS NULL 
+AND sos.load_end_date IS NULL
+ORDER BY so.order_date DESC;
 ```
 
 ## Остановка
